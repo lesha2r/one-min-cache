@@ -1,3 +1,5 @@
+import { calcApproxObjSize, checkExpiration } from './helpers.js'
+
 /**
  * Constructs cache storage instance
  */
@@ -87,11 +89,9 @@ class OneMinCache {
       }
 
       // Check expire time for the key
-      if (this.storage[key].expiresAt !== null) {
-        if (new Date().getTime() > this.storage[key].expiresAt) {
+      if (checkExpiration(this.storage[key]?.expiresAt)) {
           cachedData = null;
           this.clear(key);
-        }
       }
 
       return cachedData;
@@ -115,10 +115,15 @@ class OneMinCache {
      * @return { Boolean } true if storage has a key; false if it doesn't
     */
     this.has = (key) => {
+      // Check expire time for the key
+      if (checkExpiration(this.storage[key]?.expiresAt) === true) {
+        this.clear(key);
+      }
+
       const result = (
         key in this.storage &&
         this.storage[key].data !== undefined
-    ) ? true : false;
+      ) ? true : false;
 
       this._debugLog(`has "${key}": ${result}`);
 
@@ -130,7 +135,7 @@ class OneMinCache {
      * @param { String } key
      */
     this.clear = (key) => {
-      this._debugLog('clear');
+      this._debugLog('clear', key);
 
       delete this.storage[key];
     };
@@ -139,7 +144,7 @@ class OneMinCache {
      * Methods clears all keys that are expired
      */
     this.clearExpired = () => {
-      this._debugLog('clearExpired');
+      this._debugLog('clearExpired (all)');
 
       const allKeys = Object.keys(this.storage);
       const timestamp = new Date().getTime();
@@ -158,7 +163,7 @@ class OneMinCache {
      * Method clears the storage fully
      */
     this.clearAll = () => {
-      this._debugLog('clearAll');
+      this._debugLog('clearAll (both expired and not expired)');
 
       this.storage = {};
     };
@@ -178,7 +183,7 @@ class OneMinCache {
      * @return { Number } approximate object size in kb
      */
     this.getSizeKb = () => {
-      const result = _approxObjSize(this.storage);
+      const result = calcApproxObjSize(this.storage);
 
       this._debugLog('getSizeKb: ' + result);
 
@@ -199,7 +204,7 @@ class OneMinCache {
 
     /**
      * Internal method
-     * Method performs all the regular actions required
+     * Method performs all regular actions required
      */
     this._autoLoop = () => {
       this.clearExpired();
@@ -225,42 +230,6 @@ class OneMinCache {
       if (this.options.debug === true) console.log(`[${this.id}] ` + txt);
     };
   }
-}
-
-/**
- * Function calculates size of object in kb
- * Note: calculated size is nothing more than approximate value!
- * @param { Object } object any object to be analyzed
- * @return { Number } size in kb
- */
-function _approxObjSize(object) {
-  const objectList = [];
-  const stack = [object];
-
-  let bytes = 0;
-
-  while (stack.length) {
-    const value = stack.pop();
-
-    if (typeof value === 'boolean') {
-      bytes += 4;
-    } else if (typeof value === 'string') {
-      bytes += value.length * 2;
-    } else if (typeof value === 'number') {
-      bytes += 8;
-    } else if (
-      typeof value === 'object' &&
-        objectList.indexOf(value) === -1
-    ) {
-      objectList.push(value);
-
-      for (const key in value) {
-        if (value.hasOwnProperty(key)) stack.push(value[key]);
-      }
-    }
-  }
-
-  return Math.round(bytes / 1024);
 }
 
 export default OneMinCache;
