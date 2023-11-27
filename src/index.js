@@ -1,58 +1,76 @@
-import { calcApproxObjSize, checkExpiration } from './helpers.js'
+import {calcApproxObjSize, checkExpiration, warnMsg} from './helpers.js';
+
+/**
+ * @typedef {object} TOptions
+ * @property {number} clearExpiredMs defines interval for clearing expired data in ms
+ * @property {boolean} debug allows console messages for debugging
+ * @property {number} maxSizeKb sets maximum size of storage in kb
+ * @property {number} liveTimeMs specifies default cache item live time in ms
+ */
+
+/** @type {TOptions} */
+const defaultOptions = {
+  clearExpiredMs: 10000,
+  debug: false,
+  maxSizeKb: 5000,
+  liveTimeMs: 60 * 1000,
+};
 
 /**
  * Constructs cache storage instance
  */
 class OneMinCache {
   /**
-     * @param { String } id name of the storage
-     * @param { Object } options options of the storage
-     * @param { Number } options.clearExpiredMs defines interval for clearing
-     * expired data in ms
-     * @param { Boolean } options.debug allows console messages for debugging
-     * @param { Number } options.maxSizeKb sets maximum size of storage in kb
-     */
+   * @param {string} id name of the storage
+   * @param {object} optionsArg options of the storage
+   * @param {number} [optionsArg.clearExpiredMs] defines interval for clearing
+   * expired data in ms
+   * @param {boolean} [optionsArg.debug] allows console messages for debugging
+   * @param {number} [optionsArg.maxSizeKb] sets maximum size of storage in kb
+   * @param {number} [optionsArg.liveTimeMs] specifies default cache item live time in ms
+   */
   constructor(
       id,
-      options = {
-        clearExpiredMs: 10000,
-        debug: false,
-        maxSizeKb: 5000,
-      },
+      optionsArg = defaultOptions,
   ) {
-    if (!options.clearExpiredMs) {
-      options.clearExpiredMs = null;
-    }
+    /** @type {TOptions} */
+    this.options = {
+      ...defaultOptions,
+      ...optionsArg,
+    };
 
-    if (options.clearExpiredMs !== null &&
-      typeof options.clearExpiredMs !== 'number') {
-      throw new Error('Incorrect value of options.clearExpiredMs');
-    }
 
-    if (typeof options.debug !== 'boolean') {
-      options.debug = false;
+    if (typeof this.options.clearExpiredMs !== 'number' || this.options.clearExpiredMs === 0) {
+      this.options.clearExpiredMs = defaultOptions.clearExpiredMs;
+      // eslint-disable-next-line max-len
+      warnMsg(`Warning! options.clearExpiredMs must be a number greater than 0. Set to default value: ${this.options.clearExpiredMs}`);
     }
-
-    if (typeof options.maxSizeKb !== 'number') {
-      options.maxSizeKb = null;
+    if (typeof this.options.debug !== 'boolean') {
+      this.options.debug = defaultOptions.debug;
+      // eslint-disable-next-line max-len
+      warnMsg(`options.debug must be a boolean value. Set to default value: ${this.options.debug}`);
+    }
+    if (typeof this.options.maxSizeKb !== 'number') {
+      this.options.maxSizeKb = defaultOptions.maxSizeKb;
+      // eslint-disable-next-line max-len
+      warnMsg(`options.maxSizeKb must be a number. Set to default value: ${this.options.maxSizeKb}`);
+    }
+    if (typeof this.options.liveTimeMs !== 'number') {
+      this.options.liveTimeMs = defaultOptions.liveTimeMs;
+      // eslint-disable-next-line max-len
+      warnMsg(`options.liveTimeMs must be a number. Set to default value: ${this.options.liveTimeMs}`);
     }
 
     this.id = id;
-
     this.storage = {};
 
-    this.options = {
-      debug: options.debug || false,
-      clearExpiredMs: options.clearExpiredMs,
-    };
-
     /**
-     * Method adds data to the storage
-     * @param { String } key store data by the key
-     * @param { Any } dataToStore data to store
-     * @param { Number } liveTimeMs autoclear after ms
-    */
-    this.add = (key, dataToStore, liveTimeMs = 60 * 1000) => {
+     * Puts data to the storage
+     * @param {string} key store data by the key
+     * @param {any} dataToStore data to store
+     * @param {number} [liveTimeMs] autoclear after ms
+     */
+    this.add = (key, dataToStore, liveTimeMs = this.options.liveTimeMs) => {
       this._debugLog(`add "${key}"`);
 
       if (key === undefined) throw new Error('Missing required field: key');
@@ -72,10 +90,10 @@ class OneMinCache {
     };
 
     /**
-     * Method returns data stored by key
-     * @param { String } key named key that were used while adding data
-     * @return { * } data stored by the key
-    */
+     * Returns data stored by key
+     * @param {string} key named key that were used while adding data
+     * @returns {any} data stored by the key
+     */
     this.get = (key) => {
       this._debugLog('get');
 
@@ -90,19 +108,19 @@ class OneMinCache {
 
       // Check expire time for the key
       if (checkExpiration(this.storage[key]?.expiresAt)) {
-          cachedData = null;
-          this.clear(key);
+        cachedData = null;
+        this.clear(key);
       }
 
       return cachedData;
     };
 
     /**
-     * Method clears expired keys and returns all data stored in storage
-     * @return { Object } whole storage object
+     * Clears expired keys and returns all data stored in storage
+     * @returns {object} whole storage object
      */
     this.getAll = () => {
-      if (options.clearExpiredMs) this.clearExpired();
+      if (this.options.clearExpiredMs) this.clearExpired();
 
       this._debugLog('getAll');
 
@@ -110,10 +128,10 @@ class OneMinCache {
     };
 
     /**
-     * Method checks if storage has a key and its data is not undefined
-     * @param { String } key key that should be checked
-     * @return { Boolean } true if storage has a key; false if it doesn't
-    */
+     * Checks if storage has a key and its data is not undefined
+     * @param {string} key key that should be checked
+     * @returns {boolean} true if storage has a key; false if it doesn't
+     */
     this.has = (key) => {
       // Check expire time for the key
       if (checkExpiration(this.storage[key]?.expiresAt) === true) {
@@ -131,17 +149,17 @@ class OneMinCache {
     };
 
     /**
-     * Method clears data and the key itself
-     * @param { String } key
+     * Clears stored data by the key and deletes the key itself
+     * @param {string} key key to be cleared
      */
     this.clear = (key) => {
-      this._debugLog('clear', key);
+      this._debugLog('clear: ' + key);
 
       delete this.storage[key];
     };
 
     /**
-     * Methods clears all keys that are expired
+     * Clears all keys that are expired
      */
     this.clearExpired = () => {
       this._debugLog('clearExpired (all)');
@@ -160,7 +178,7 @@ class OneMinCache {
     };
 
     /**
-     * Method clears the storage fully
+     * Clears the storage fully
      */
     this.clearAll = () => {
       this._debugLog('clearAll (both expired and not expired)');
@@ -169,8 +187,8 @@ class OneMinCache {
     };
 
     /**
-     * Method returns list of the keys
-     * @return { Array }
+     * Returns list of the keys
+     * @returns {string[]} list of the keys
      */
     this.getKeys = () => {
       this._debugLog('getKeys');
@@ -179,8 +197,8 @@ class OneMinCache {
     };
 
     /**
-     * Method calculates approximate size of the storage in kbytes
-     * @return { Number } approximate object size in kb
+     * Calculates approximate size of the storage in kb
+     * @returns {number} approximate object size in kb
      */
     this.getSizeKb = () => {
       const result = calcApproxObjSize(this.storage);
@@ -192,7 +210,7 @@ class OneMinCache {
 
     /**
      * Method returns qty of keys stored
-     * @return { Number } qty of keys stored
+     * @returns {number} qty of keys stored
      */
     this.getKeysQty = () => {
       const result = Object.keys(this.storage).length;
@@ -214,7 +232,7 @@ class OneMinCache {
      * Internal method
      * Method sets auto timer for regular actions
      */
-    if (options.clearExpiredMs) {
+    if (this.options.clearExpiredMs) {
       this._autoTimer = setInterval(
           this._autoLoop,
           this.options.clearExpiredMs,
@@ -224,7 +242,7 @@ class OneMinCache {
     /**
      * Internal method
      * Method prints message if debug mode is on
-     * @param { String } txt text for printing
+     * @param {string} txt text for printing
      */
     this._debugLog = (txt) => {
       if (this.options.debug === true) console.log(`[${this.id}] ` + txt);
