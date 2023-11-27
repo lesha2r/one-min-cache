@@ -1,7 +1,7 @@
 {
   "name": "one-min-cache",
   "version": "1.0.3",
-  "description": "",
+  "description": "A simple key-value storage for caching data really quick",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
