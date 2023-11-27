@@ -51,4 +51,4 @@ cache.clearExpired()
 
 // Forces the storage to be fully cleared
 cache.clearAll()
-````
+```
